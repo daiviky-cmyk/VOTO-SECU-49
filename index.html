@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-200 selection:bg-sky-500 selection:text-white">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boleta Única Electrónica - Centro de Estudiantes</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js para estadísticas -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS para exportar Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Arial', 'Helvetica', 'sans-serif'],
+                        mono: ['Courier New', 'monospace'],
+                    },
+                    colors: {
+                        bue: {
+                            blue: '#0070BA',
+                            darkBlue: '#005596',
+                            header: '#0062a8',
+                            lightGray: '#eef2f5',
+                            border: '#b8c4ce',
+                            accent: '#e63946'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #dbe2e8;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .bue-frame {
+            background-color: #f4f7f9;
+            border: 4px solid #a2b3c2;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+            border-radius: 8px;
+        }
+
+        .bue-card {
+            background: #ffffff;
+            border: 2px solid #b2c1ce;
+            border-radius: 12px;
+            transition: all 0.15s ease-in-out;
+            cursor: pointer;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .bue-card:hover, .bue-card:active {
+            border-color: #0070BA;
+            box-shadow: 0 0 20px rgba(0, 112, 186, 0.4);
+            transform: translateY(-3px) scale(1.02);
+        }
+
+        .bue-card-header {
+            padding: 8px 12px;
+            color: #ffffff;
+            font-weight: 900;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .bue-btn-primary {
+            background: linear-gradient(180deg, #007ccb 0%, #005f9e 100%);
+            border: 1px solid #004d80;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+        }
+
+        .bue-btn-primary:active {
+            background: linear-gradient(180deg, #004d80 0%, #005f9e 100%);
+        }
+
+        .bue-btn-blank {
+            background: linear-gradient(180deg, #009be3 0%, #007bc4 100%);
+            border: 1px solid #0066a3;
+        }
+
+        .numpad-btn {
+            background: #ffffff;
+            border: 2px solid #b0c0cf;
+            font-size: 1.75rem;
+            font-weight: bold;
+            color: #1e293b;
+            border-radius: 8px;
+            box-shadow: 0 3px 0 #92a4b5;
+        }
+        .numpad-btn:active {
+            box-shadow: none;
+            transform: translateY(3px);
+            background: #e2e8f0;
+        }
+    </style>
+
+    <!-- Firebase SDK v11.6.1 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'bue-centro-estudiantes';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyDemoConfigKeyForVotingAppBUE",
+            authDomain: "bue-voting-app.firebaseapp.com",
+            projectId: "bue-voting-app",
+            storageBucket: "bue-voting-app.appspot.com",
+            messagingSenderId: "1234567890",
+            appId: "1:1234567890:web:abcdef123456"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.bueFirebase = {
+            db, auth, appId, collection, doc, setDoc, getDoc, addDoc, onSnapshot,
+            currentUser: null
+        };
+
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                try { await signInAnonymously(auth); } catch(e){}
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                window.bueFirebase.currentUser = user;
+                if (window.initFirebaseListeners) window.initFirebaseListeners();
+            }
+        });
+
+        initAuth();
+    </script>
+</head>
+<body class="min-h-screen flex items-center justify-center p-2 sm:p-4">
+
+    <!-- MARCO PRINCIPAL VIRTUAL DE URNA BUE -->
+    <div class="bue-frame max-w-6xl w-full min-h-[92vh] flex flex-col justify-between overflow-hidden relative shadow-2xl">
+
+        <!-- CABECERA INSTITUCIONAL BUE -->
+        <header class="bg-bue-header text-white px-4 py-2.5 flex justify-between items-center border-b-2 border-bue-darkBlue">
+            <div>
+                <span class="text-xs font-bold tracking-widest uppercase text-sky-200 block">Sistema Elector Digital • BUE</span>
+                <h1 class="text-lg sm:text-xl font-black uppercase tracking-tight leading-tight">Elecciones Centro de Estudiantes</h1>
+            </div>
+
+            <!-- Indicadores de Conexión y Botón de Autoridad -->
+            <div class="flex items-center gap-2">
+                <div id="network-status-badge" class="px-2.5 py-1 rounded bg-sky-900/80 text-white border border-sky-400/30 text-xs font-bold flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="network-status-text">ONLINE</span>
+                </div>
+
+                <div id="sheets-status-badge" class="flex px-2.5 py-1 rounded bg-emerald-800 text-white border border-emerald-500 text-xs font-bold items-center gap-1.5">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span id="sheets-status-text">SHEETS: OK</span>
+                </div>
+
+                <!-- Botón de Acceso para Autoridad de Mesa -->
+                <button type="button" id="btn-admin-trigger" onclick="openAdminAuthModal()" class="bg-sky-950 hover:bg-black text-white border border-sky-700 px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 uppercase transition cursor-pointer z-10">
+                    <i class="fa-solid fa-lock text-amber-400"></i>
+                    <span class="hidden md:inline">Autoridad Mesa</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- SUB-CABECERA / PASO ACTUAL -->
+        <div class="bg-slate-300 border-b border-slate-400 px-4 py-2 flex justify-between items-center text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wide">
+            <span class="flex items-center gap-2">
+                <i class="fa-solid fa-user-check text-bue-blue text-base"></i> Cargo: Centro de Estudiantes
+            </span>
+            <span id="bue-status-step" class="text-bue-blue font-black uppercase bg-white px-3 py-1 rounded-full border border-slate-400 shadow-sm">
+                Paso 1: Acreditación de DNI
+            </span>
+        </div>
+
+        <!-- CONTENEDOR DE PANTALLAS -->
+        <main class="flex-grow p-4 sm:p-6 flex flex-col justify-center bg-slate-100 relative">
+
+            <!-- ================= VISTA 1: INGRESO Y VALIDACIÓN DE DNI ================= -->
+            <section id="login-view" class="max-w-xl w-full mx-auto my-auto space-y-4">
+                <div class="bg-white p-6 rounded-xl border-2 border-slate-300 shadow-md text-center space-y-4">
+                    <div class="bg-sky-50 border border-sky-200 text-bue-blue p-3 rounded-lg text-sm font-bold uppercase">
+                        <i class="fa-solid fa-id-card text-lg mr-2"></i> Ingrese su número de DNI para habilitar la votación
+                    </div>
+
+                    <!-- Input Visor DNI -->
+                    <div class="relative max-w-xs mx-auto">
+                        <input type="text" id="dni-input" readonly placeholder="00000000" 
+                            class="w-full text-center text-3xl font-black font-mono tracking-widest bg-slate-50 border-2 border-bue-blue text-slate-800 rounded-lg py-2 outline-none shadow-inner">
+                        <button onclick="clearDNIInput()" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 p-2 text-sm font-bold">
+                            <i class="fa-solid fa-circle-xmark text-xl"></i>
+                        </button>
+                    </div>
+
+                    <!-- Mensaje de Error DNI -->
+                    <div id="dni-error" class="hidden text-rose-700 text-xs bg-rose-100 border border-rose-300 p-2.5 rounded-lg font-bold flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation text-base"></i>
+                        <span id="dni-error-msg">DNI no registrado o ya emitió su voto.</span>
+                    </div>
+
+                    <!-- Teclado Numérico Gigante -->
+                    <div class="grid grid-cols-3 gap-2.5 max-w-xs mx-auto pt-2">
+                        <button onclick="pressNum('1')" class="numpad-btn py-3">1</button>
+                        <button onclick="pressNum('2')" class="numpad-btn py-3">2</button>
+                        <button onclick="pressNum('3')" class="numpad-btn py-3">3</button>
+                        <button onclick="pressNum('4')" class="numpad-btn py-3">4</button>
+                        <button onclick="pressNum('5')" class="numpad-btn py-3">5</button>
+                        <button onclick="pressNum('6')" class="numpad-btn py-3">6</button>
+                        <button onclick="pressNum('7')" class="numpad-btn py-3">7</button>
+                        <button onclick="pressNum('8')" class="numpad-btn py-3">8</button>
+                        <button onclick="pressNum('9')" class="numpad-btn py-3">9</button>
+                        <button onclick="clearDNIInput()" class="numpad-btn py-3 text-rose-600 bg-rose-50"><i class="fa-solid fa-delete-left"></i></button>
+                        <button onclick="pressNum('0')" class="numpad-btn py-3">0</button>
+                        <button onclick="startVoting()" class="numpad-btn py-3 bg-emerald-600 text-white border-emerald-700 active:bg-emerald-800"><i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+
+                    <button onclick="startVoting()" class="w-full max-w-xs py-3.5 px-6 bue-btn-primary rounded-xl font-black text-lg tracking-wide uppercase shadow-lg hover:brightness-110 flex items-center justify-center gap-2 mx-auto">
+                        <span>Ingresar a Votar</span>
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+            </section>
+
+            <!-- ================= VISTA 2: PANTALLA DE VOTACIÓN (GRILLA DE LISTAS) ================= -->
+            <section id="ballot-view" class="hidden flex-col h-full space-y-4">
+                <div class="text-center bg-sky-100 border border-sky-300 p-2.5 rounded-lg text-bue-darkBlue font-black uppercase text-sm sm:text-base">
+                    Seleccione la lista de su preferencia tocando sobre la boleta
+                </div>
+
+                <!-- Grilla dinámica de listas verticales -->
+                <div id="candidate-cards-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 flex-grow items-stretch">
+                    <!-- Se cargan dinámicamente con JS -->
+                </div>
+
+                <!-- Fila inferior: Botón Voto en Blanco -->
+                <div class="pt-2 flex justify-end">
+                    <button onclick="selectCandidate('BLANCO')" class="bue-btn-blank text-white font-black py-4 px-8 rounded-xl text-base sm:text-lg uppercase shadow-md hover:brightness-105 flex items-center gap-3">
+                        <i class="fa-solid fa-file text-xl"></i>
+                        <span>Votar en Blanco</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- ================= VISTA 3: CONFIRMACIÓN DEL VOTO ================= -->
+            <section id="confirm-view" class="hidden max-w-lg w-full mx-auto my-auto space-y-6">
+                <div class="bg-white p-6 rounded-2xl border-4 border-bue-blue shadow-2xl text-center space-y-5">
+                    <div class="bg-amber-100 text-amber-900 border border-amber-300 p-3 rounded-lg text-xs font-black uppercase">
+                        <i class="fa-solid fa-shield-halved text-base mr-1"></i> Confirme su elección antes de imprimir la boleta
+                    </div>
+
+                    <div id="confirm-card-preview" class="p-4 bg-slate-50 border-2 border-slate-300 rounded-xl space-y-3">
+                        <!-- Vista previa de la opción elegida -->
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 pt-2">
+                        <button onclick="cancelSelection()" class="bg-slate-200 border border-slate-400 hover:bg-slate-300 text-slate-800 py-3.5 px-4 rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-arrow-left"></i> Modificar
+                        </button>
+                        <button onclick="confirmAndCastVote()" class="bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-800 py-3.5 px-4 rounded-xl font-black uppercase text-sm shadow-lg flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-check text-lg"></i> Confirmar Voto
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= VISTA 4: COMPROBANTE FINAL ================= -->
+            <section id="thanks-view" class="hidden max-w-md w-full mx-auto my-auto text-center space-y-6">
+                <div class="bg-white p-8 rounded-2xl border-4 border-emerald-500 shadow-2xl space-y-4">
+                    <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto border-2 border-emerald-400">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <h2 class="text-2xl font-black uppercase text-slate-800 tracking-tight">¡Voto Registrado con Éxito!</h2>
+                    <p class="text-slate-600 text-sm font-bold">Su sufragio ha sido procesado de forma segura y anónima.</p>
+                    
+                    <div class="bg-slate-100 p-3 rounded-lg border border-slate-300 font-mono text-xs text-slate-500 break-all">
+                        Firma Digital: <span id="receipt-hash">00000000</span>
+                    </div>
+
+                    <p class="text-xs text-sky-800 bg-sky-50 p-2 rounded font-bold">La pantalla se reiniciará automáticamente para el siguiente votante en <span id="countdown">4</span> segundos.</p>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- PIE DE PÁGINA PANTALLA TÁCTIL CON PROGRESO DE PASOS -->
+        <footer class="bg-slate-200 border-t border-slate-300 px-4 py-2.5 flex justify-between items-center text-xs font-bold text-slate-600">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-circle-info text-bue-blue"></i>
+                <span>Mesa N° 1 • Facultad de Estudiantes</span>
+            </div>
+            
+            <!-- Pasos tipo e-voto (1 - 2 - 3) -->
+            <div class="flex items-center gap-3">
+                <span id="step-dot-1" class="w-6 h-6 rounded-full bg-bue-blue text-white flex items-center justify-center text-xs font-black shadow">1</span>
+                <span class="w-4 h-0.5 bg-slate-400"></span>
+                <span id="step-dot-2" class="w-6 h-6 rounded-full bg-slate-300 text-slate-600 flex items-center justify-center text-xs font-black">2</span>
+                <span class="w-4 h-0.5 bg-slate-400"></span>
+                <span id="step-dot-3" class="w-6 h-6 rounded-full bg-slate-300 text-slate-600 flex items-center justify-center text-xs font-black">3</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- ================= MODAL AUTENTICACIÓN AUTORIDAD DE MESA ================= -->
+    <div id="admin-auth-modal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 border-4 border-sky-600 shadow-2xl text-center space-y-4 relative">
+            <button onclick="closeAdminAuthModal()" class="absolute right-3 top-3 text-slate-400 hover:text-rose-600 text-xl font-bold p-1">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <div class="w-12 h-12 bg-sky-100 text-sky-700 rounded-full flex items-center justify-center text-2xl mx-auto border border-sky-300">
+                <i class="fa-solid fa-user-shield"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-black uppercase text-slate-800">Autoridad de Mesa</h3>
+                <p class="text-xs text-slate-500 font-bold">Ingrese el PIN secreto para habilitar el panel</p>
+            </div>
+
+            <input type="password" id="admin-pin-input" maxlength="6" placeholder="••••" readonly
+                class="w-full text-center text-3xl font-mono tracking-widest bg-slate-100 border-2 border-slate-300 rounded-lg py-2 text-slate-800 outline-none">
+
+            <!-- Teclado Numérico del PIN -->
+            <div class="grid grid-cols-3 gap-2 pt-1">
+                <button onclick="pressPin('1')" class="numpad-btn py-2 text-base">1</button>
+                <button onclick="pressPin('2')" class="numpad-btn py-2 text-base">2</button>
+                <button onclick="pressPin('3')" class="numpad-btn py-2 text-base">3</button>
+                <button onclick="pressPin('4')" class="numpad-btn py-2 text-base">4</button>
+                <button onclick="pressPin('5')" class="numpad-btn py-2 text-base">5</button>
+                <button onclick="pressPin('6')" class="numpad-btn py-2 text-base">6</button>
+                <button onclick="pressPin('7')" class="numpad-btn py-2 text-base">7</button>
+                <button onclick="pressPin('8')" class="numpad-btn py-2 text-base">8</button>
+                <button onclick="pressPin('9')" class="numpad-btn py-2 text-base">9</button>
+                <button onclick="clearPinInput()" class="numpad-btn py-2 text-rose-600 bg-rose-50 text-sm font-bold"><i class="fa-solid fa-eraser"></i></button>
+                <button onclick="pressPin('0')" class="numpad-btn py-2 text-base">0</button>
+                <button onclick="verifyAdminPIN()" class="numpad-btn py-2 bg-sky-600 text-white border-sky-700 text-sm font-bold"><i class="fa-solid fa-key"></i></button>
+            </div>
+
+            <div id="pin-error-msg" class="hidden text-xs text-rose-600 font-bold bg-rose-50 p-2 rounded border border-rose-200">
+                PIN incorrecto. Reintente.
+            </div>
+
+            <button onclick="verifyAdminPIN()" class="w-full py-3 bg-sky-700 hover:bg-sky-800 text-white font-black rounded-lg uppercase text-sm shadow">
+                Ingresar al Panel
+            </button>
+        </div>
+    </div>
+
+    <!-- ================= MODAL PANEL DE ADMINISTRACIÓN Y ESCRUTINIO ================= -->
+    <div id="admin-panel-modal" class="hidden fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 overflow-y-auto p-4 sm:p-6">
+        <div class="bg-white rounded-2xl max-w-5xl w-full mx-auto p-6 border-2 border-slate-300 shadow-2xl space-y-6">
+            
+            <!-- Encabezado del Panel -->
+            <div class="flex justify-between items-center border-b pb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-sky-700 text-white rounded-lg flex items-center justify-center text-xl font-black">
+                        <i class="fa-solid fa-chart-pie"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-black uppercase text-slate-800">Panel Fiscal y Administración</h2>
+                        <span class="text-xs text-slate-500 font-bold">Control de Escrutinio, Padrón y Sincronización Google Sheets</span>
+                    </div>
+                </div>
+                <button onclick="closeAdminPanel()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-4 py-2 rounded-lg text-sm uppercase">
+                    <i class="fa-solid fa-xmark mr-1"></i> Cerrar
+                </button>
+            </div>
+
+            <!-- Métrica Rápidas -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-sky-50 border border-sky-200 p-4 rounded-xl">
+                    <span class="text-xs font-bold text-sky-700 uppercase block">Total Votos Emitidos</span>
+                    <span id="metric-total-votes" class="text-3xl font-black text-sky-900">0</span>
+                </div>
+                <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
+                    <span class="text-xs font-bold text-emerald-700 uppercase block">Alumnos en Padrón</span>
+                    <span id="metric-padron-count" class="text-3xl font-black text-emerald-900">0</span>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl">
+                    <span class="text-xs font-bold text-amber-700 uppercase block">Participación (%)</span>
+                    <span id="metric-turnout" class="text-3xl font-black text-amber-900">0%</span>
+                </div>
+                <div class="bg-purple-50 border border-purple-200 p-4 rounded-xl">
+                    <span class="text-xs font-bold text-purple-700 uppercase block">Pendientes Sheets</span>
+                    <span id="metric-pending-sync" class="text-3xl font-black text-purple-900">0</span>
+                </div>
+            </div>
+
+            <!-- Sección Gráfico e Historial -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Gráfico de Conteo -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                    <h4 class="font-black text-sm uppercase text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-bue-blue"></i> Escrutinio Provisorio en Vivo
+                    </h4>
+                    <div class="h-64 relative flex items-center justify-center">
+                        <canvas id="resultsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Configuración de Google Sheets Webhook -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                    <h4 class="font-black text-sm uppercase text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel text-emerald-600"></i> Vinculación Google Sheet (En Tiempo Real)
+                    </h4>
+                    <p class="text-xs text-slate-600 font-bold">
+                        Ingrese la URL de su Google Apps Script para enviar cada voto automáticamente a la planilla:
+                    </p>
+                    <input type="url" id="sheets-script-url" placeholder="https://script.google.com/macros/s/.../exec"
+                        class="w-full text-xs font-mono p-2.5 border-2 border-slate-300 rounded-lg outline-none focus:border-bue-blue">
+                    
+                    <div class="flex gap-2">
+                        <button onclick="saveSheetsUrl()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-xs uppercase flex-grow">
+                            <i class="fa-solid fa-floppy-disk mr-1"></i> Guardar URL
+                        </button>
+                        <button onclick="forceSyncPendingVotes()" class="bg-sky-700 hover:bg-sky-800 text-white font-bold px-4 py-2 rounded-lg text-xs uppercase">
+                            <i class="fa-solid fa-rotate mr-1"></i> Sincronizar Pendientes
+                        </button>
+                    </div>
+
+                    <div class="border-t pt-3">
+                        <h5 class="font-black text-xs uppercase text-slate-700 mb-1">Exportación Local Completa</h5>
+                        <button onclick="exportToExcel()" class="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold p-3 rounded-lg text-xs uppercase flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-download text-base"></i> Descargar Planilla Excel / Sheets (.xlsx)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edición de Listas y Candidatos (Nombres, Fotos y Logos) -->
+            <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
+                <div class="flex justify-between items-center border-b pb-2 flex-wrap gap-2">
+                    <div>
+                        <h4 class="font-black text-sm uppercase text-slate-700 flex items-center gap-2">
+                            <i class="fa-solid fa-id-card text-bue-blue"></i> Configuración de Listas, Candidatos y Logos
+                        </h4>
+                        <p class="text-xs text-slate-500 font-bold mt-0.5">
+                            <i class="fa-solid fa-folder-open text-amber-600 mr-1"></i> Puedes poner nombres directos de archivos subidos a GitHub como <code class="bg-slate-200 px-1 py-0.5 rounded font-mono">logo1.png</code> o rutas tipo <code class="bg-slate-200 px-1 py-0.5 rounded font-mono">imagenes/logo1.png</code>.
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="addNewCandidateList()" class="bg-sky-700 hover:bg-sky-800 text-white font-bold px-3 py-1.5 rounded text-xs uppercase flex items-center gap-1 shadow">
+                            <i class="fa-solid fa-plus"></i> Nueva Lista
+                        </button>
+                        <button onclick="saveAllCandidateChanges()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-1.5 rounded text-xs uppercase flex items-center gap-1.5 shadow">
+                            <i class="fa-solid fa-floppy-disk text-sm"></i> Guardar Cambios
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="admin-candidates-editor-list" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Se llena dinámicamente con JS -->
+                </div>
+
+                <div class="pt-2 flex justify-end">
+                    <button onclick="saveAllCandidateChanges()" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 px-6 rounded-xl text-xs uppercase shadow-lg flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check text-base"></i> Guardar Todos los Cambios de Listas
+                    </button>
+                </div>
+            </div>
+
+            <!-- Carga e Importación de Padrón Electoral -->
+            <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
+                <h4 class="font-black text-sm uppercase text-slate-700 flex items-center gap-2">
+                    <i class="fa-solid fa-users-rectangle text-bue-blue"></i> Carga y Control del Padrón de Estudiantes
+                </h4>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Opción 1: Archivo Excel -->
+                    <div class="bg-white p-4 rounded-lg border border-slate-300 space-y-2">
+                        <span class="text-xs font-black uppercase text-slate-700 block">Opción 1: Subir Archivo Excel/CSV</span>
+                        <input type="file" id="padron-file-input" accept=".xlsx, .xls, .csv" class="text-xs text-slate-600 w-full">
+                        <button onclick="processPadronFile()" class="w-full bg-sky-700 text-white font-bold py-2 rounded text-xs uppercase hover:bg-sky-800">
+                            Cargar Archivo Excel
+                        </button>
+                    </div>
+
+                    <!-- Opción 2: Pegar Lista de DNIs -->
+                    <div class="bg-white p-4 rounded-lg border border-slate-300 space-y-2">
+                        <span class="text-xs font-black uppercase text-slate-700 block">Opción 2: Pegar lista de DNIs</span>
+                        <textarea id="padron-text-input" rows="2" placeholder="Pegue los DNIs separados por comas o líneas..." class="w-full p-2 text-xs font-mono border rounded"></textarea>
+                        <button onclick="processPadronText()" class="w-full bg-slate-700 text-white font-bold py-2 rounded text-xs uppercase hover:bg-slate-800">
+                            Cargar Lista de Texto
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seguridad: Cambiar PIN Secreto -->
+            <div class="bg-slate-100 p-4 rounded-xl border border-slate-300 flex justify-between items-center">
+                <div>
+                    <h5 class="font-black text-xs uppercase text-slate-800">Seguridad: Cambiar PIN de Autoridad</h5>
+                    <p class="text-xs text-slate-500 font-bold">Defina un código privado para que solo las personas autorizadas accedan.</p>
+                </div>
+                <div class="flex gap-2">
+                    <input type="password" id="new-pin-input" maxlength="6" placeholder="Nuevo PIN" class="w-28 text-center text-sm font-mono border-2 border-slate-300 rounded p-1.5">
+                    <button onclick="changeAdminPIN()" class="bg-sky-800 hover:bg-sky-900 text-white font-bold px-3 py-1.5 rounded text-xs uppercase">
+                        Guardar PIN
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- SCRIPT PRINCIPAL DE LÓGICA Y EVENTOS -->
+    <script>
+        // DATOS Y ESTADOS GLOBALES DE LA APLICACIÓN
+        let appState = {
+            currentStep: 1, // 1: DNI, 2: Votación, 3: Confirmación, 4: Fin
+            enteredDNI: '',
+            selectedCandidate: null,
+            adminPIN: localStorage.getItem('bue_admin_pin') || '1234',
+            sheetsUrl: localStorage.getItem('bue_sheets_url') || 'https://script.google.com/macros/s/AKfycbx65DkErxd6Ta8-f9lOLrgz-zVPpttDBCoQKR7dZqKeq7ymdVqu6Z1XZhTrjI8FS4LS/exec',
+            votedDNIs: JSON.parse(localStorage.getItem('bue_voted_dnis') || '[]'),
+            padron: JSON.parse(localStorage.getItem('bue_padron') || '[]'),
+            votesQueue: JSON.parse(localStorage.getItem('bue_pending_votes') || '[]'),
+            results: JSON.parse(localStorage.getItem('bue_results') || '{"1":0,"2":0,"3":0,"BLANCO":0}'),
+            candidates: JSON.parse(localStorage.getItem('bue_candidates_config') || JSON.stringify([
+                {
+                    id: "1",
+                    listNumber: "LISTA 001",
+                    partyName: "FRENTE ESTUDIANTIL",
+                    president: "MARTÍN GÓMEZ",
+                    vice: "SOFÍA LÓPEZ",
+                    color: "#0070BA",
+                    avatar: "candidato1.jpg",
+                    logo: "logo1.png"
+                },
+                {
+                    id: "2",
+                    listNumber: "LISTA 002",
+                    partyName: "UNIDAD ACADÉMICA",
+                    president: "LUCAS GARCÍA",
+                    vice: "MARTA GONZÁLEZ",
+                    color: "#16a34a",
+                    avatar: "candidato2.jpg",
+                    logo: "logo2.png"
+                },
+                {
+                    id: "3",
+                    listNumber: "LISTA 003",
+                    partyName: "IMPULSO UNIVERSITARIO",
+                    president: "JOSÉ LUIS DÍAZ",
+                    vice: "NICOLÁS GARCÍA",
+                    color: "#ea580c",
+                    avatar: "candidato3.jpg",
+                    logo: "logo3.png"
+                }
+            ]))
+        };
+
+        let resultsChart = null;
+
+        // ASIGNACIÓN GLOBAL DE FUNCIONES PARA EVENTOS ONCLICK EN HTML
+        window.openAdminAuthModal = function() {
+            document.getElementById('admin-pin-input').value = '';
+            document.getElementById('pin-error-msg').classList.add('hidden');
+            document.getElementById('admin-auth-modal').classList.remove('hidden');
+        };
+
+        window.closeAdminAuthModal = function() {
+            document.getElementById('admin-auth-modal').classList.add('hidden');
+        };
+
+        window.pressPin = function(num) {
+            const input = document.getElementById('admin-pin-input');
+            if (input.value.length < 6) input.value += num;
+        };
+
+        window.clearPinInput = function() {
+            document.getElementById('admin-pin-input').value = '';
+        };
+
+        window.verifyAdminPIN = function() {
+            const entered = document.getElementById('admin-pin-input').value;
+            if (entered === appState.adminPIN) {
+                closeAdminAuthModal();
+                openAdminPanel();
+            } else {
+                document.getElementById('pin-error-msg').classList.remove('hidden');
+            }
+        };
+
+        window.openAdminPanel = function() {
+            document.getElementById('admin-panel-modal').classList.remove('hidden');
+            document.getElementById('sheets-script-url').value = appState.sheetsUrl;
+            renderAdminCandidatesEditor();
+            updateMetricsAndChart();
+        };
+
+        window.closeAdminPanel = function() {
+            document.getElementById('admin-panel-modal').classList.add('hidden');
+        };
+
+        function renderAdminCandidatesEditor() {
+            const container = document.getElementById('admin-candidates-editor-list');
+            if (!container) return;
+            container.innerHTML = '';
+
+            appState.candidates.forEach((cand, index) => {
+                const box = document.createElement('div');
+                box.className = 'bg-white p-3 rounded-xl border border-slate-300 space-y-2 text-xs shadow-sm candidate-edit-card';
+                box.dataset.id = cand.id;
+
+                box.innerHTML = `
+                    <div class="flex justify-between items-center border-b pb-1">
+                        <span class="font-black text-slate-800 uppercase">Lista ${index + 1}</span>
+                        <div class="flex items-center gap-2">
+                            <input type="color" value="${cand.color}" data-field="color" class="cand-input w-6 h-6 rounded cursor-pointer border-0">
+                            ${appState.candidates.length > 1 ? `<button type="button" onclick="removeCandidateList('${cand.id}')" class="text-rose-600 font-bold hover:text-rose-800 p-1"><i class="fa-solid fa-trash"></i></button>` : ''}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="font-bold text-slate-600 block mb-0.5">Ruta / Archivo Foto Candidato/a:</label>
+                        <input type="text" value="${cand.avatar}" data-field="avatar" placeholder="candidato1.jpg" class="cand-input w-full p-1.5 border rounded font-mono text-[11px]">
+                    </div>
+
+                    <div>
+                        <label class="font-bold text-slate-600 block mb-0.5">Ruta / Archivo Logo Agrupación:</label>
+                        <input type="text" value="${cand.logo || ''}" data-field="logo" placeholder="logo1.png" class="cand-input w-full p-1.5 border rounded font-mono text-[11px]">
+                    </div>
+                `;
+                container.appendChild(box);
+            });
+        }
+
+        window.saveAllCandidateChanges = function() {
+            const cards = document.querySelectorAll('.candidate-edit-card');
+            cards.forEach(card => {
+                const id = card.dataset.id;
+                const cand = appState.candidates.find(c => c.id === id);
+                if (cand) {
+                    const inputs = card.querySelectorAll('.cand-input');
+                    inputs.forEach(input => {
+                        const field = input.dataset.field;
+                        if (field) {
+                            cand[field] = input.value.trim();
+                        }
+                    });
+                }
+            });
+
+            localStorage.setItem('bue_candidates_config', JSON.stringify(appState.candidates));
+            renderCandidateCards();
+            alert('¡Los cambios de listas, logos y candidatos han sido guardados con éxito!');
+        };
+
+        window.addNewCandidateList = function() {
+            // Guardar cambios existentes antes de agregar
+            const cards = document.querySelectorAll('.candidate-edit-card');
+            cards.forEach(card => {
+                const id = card.dataset.id;
+                const cand = appState.candidates.find(c => c.id === id);
+                if (cand) {
+                    card.querySelectorAll('.cand-input').forEach(input => {
+                        if (input.dataset.field) cand[input.dataset.field] = input.value.trim();
+                    });
+                }
+            });
+
+            const newId = String(Date.now());
+            const count = appState.candidates.length + 1;
+            appState.candidates.push({
+                id: newId,
+                listNumber: `LISTA 00${count}`,
+                partyName: `NUEVA LISTA ${count}`,
+                president: "NOMBRE CANDIDATO",
+                vice: "NOMBRE VICE",
+                color: "#0284c7",
+                avatar: `candidato${count}.jpg`,
+                logo: `logo${count}.png`
+            });
+
+            localStorage.setItem('bue_candidates_config', JSON.stringify(appState.candidates));
+            renderAdminCandidatesEditor();
+            renderCandidateCards();
+        };
+
+        window.removeCandidateList = function(id) {
+            if (confirm('¿Está seguro de eliminar esta lista candidata?')) {
+                appState.candidates = appState.candidates.filter(c => c.id !== id);
+                localStorage.setItem('bue_candidates_config', JSON.stringify(appState.candidates));
+                renderAdminCandidatesEditor();
+                renderCandidateCards();
+            }
+        };
+
+        function renderCandidateCards() {
+            const grid = document.getElementById('candidate-cards-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            appState.candidates.forEach(cand => {
+                const card = document.createElement('div');
+                card.className = 'bue-card';
+                card.onclick = () => selectCandidate(cand.id);
+
+                const logoSrc = cand.logo || '';
+                const logoHtml = logoSrc 
+                    ? `<img src="${logoSrc}" alt="Logo" onerror="this.src='https://placehold.co/40x40/e2e8f0/475569?text=LOGO'" class="w-8 h-8 rounded-full bg-white p-0.5 object-contain border border-white/40 shadow-sm shrink-0">` 
+                    : '';
+
+                card.innerHTML = `
+                    <div class="bue-card-header" style="background-color: ${cand.color}">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            ${logoHtml}
+                            <span class="truncate text-xs sm:text-sm font-black">${cand.partyName}</span>
+                        </div>
+                        <span class="text-xs bg-black/30 px-2 py-0.5 rounded font-mono ml-1 shrink-0">${cand.listNumber}</span>
+                    </div>
+                    <div class="p-3 text-center flex-grow flex flex-col justify-center items-center bg-white">
+                        <img src="${cand.avatar}" alt="${cand.president}" onerror="this.src='https://placehold.co/100x100/e2e8f0/475569?text=FOTO'" class="w-24 h-24 rounded-full border-2 border-slate-200 mb-2 object-cover shadow-sm">
+                        <h3 class="font-black text-slate-800 text-base uppercase leading-tight">${cand.president}</h3>
+                        <span class="text-xs font-bold text-slate-500 uppercase">Presidente/a</span>
+                        <p class="text-xs font-bold text-slate-700 mt-2 border-t pt-1 w-full uppercase">${cand.vice}</p>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        window.selectCandidate = function(candId) {
+            appState.selectedCandidate = candId;
+            const preview = document.getElementById('confirm-card-preview');
+
+            if (candId === 'BLANCO') {
+                preview.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fa-solid fa-file text-4xl text-sky-600 mb-2"></i>
+                        <h3 class="text-xl font-black uppercase text-slate-800">VOTO EN BLANCO</h3>
+                        <p class="text-xs text-slate-500 font-bold">Sin selección de lista partidaria</p>
+                    </div>
+                `;
+            } else {
+                const cand = appState.candidates.find(c => c.id === candId);
+                const logoSrc = cand.logo || '';
+                const logoHtml = logoSrc 
+                    ? `<img src="${logoSrc}" onerror="this.src='https://placehold.co/40x40/e2e8f0/475569?text=LOGO'" class="w-10 h-10 inline-block mr-2 rounded-full border border-slate-300 vertical-middle object-contain bg-white p-0.5">` 
+                    : '';
+
+                preview.innerHTML = `
+                    <div class="text-center">
+                        <div class="flex items-center justify-center gap-2 mb-2">
+                            ${logoHtml}
+                            <span class="px-3 py-1 rounded text-white text-xs font-black uppercase inline-block" style="background-color: ${cand.color}">
+                                ${cand.listNumber} - ${cand.partyName}
+                            </span>
+                        </div>
+                        <img src="${cand.avatar}" onerror="this.src='https://placehold.co/100x100/e2e8f0/475569?text=FOTO'" class="w-20 h-20 rounded-full mx-auto border-2 border-slate-300 my-1 object-cover">
+                        <h3 class="text-lg font-black uppercase text-slate-800">${cand.president}</h3>
+                        <span class="text-xs font-bold text-slate-500 uppercase block">Presidente/a</span>
+                        <p class="text-xs font-bold text-slate-700 mt-1 uppercase">${cand.vice}</p>
+                    </div>
+                `;
+            }
+
+            switchView('confirm');
+            updateStepProgress(3);
+        };
+
+        window.cancelSelection = function() {
+            switchView('ballot');
+            updateStepProgress(2);
+        };
+
+        window.confirmAndCastVote = function() {
+            const candId = appState.selectedCandidate;
+            const dni = appState.enteredDNI;
+            const timestamp = new Date().toLocaleString('es-AR');
+            const hash = 'DIG-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+
+            // Actualizar conteo local
+            appState.results[candId] = (appState.results[candId] || 0) + 1;
+            appState.votedDNIs.push(dni);
+
+            localStorage.setItem('bue_results', JSON.stringify(appState.results));
+            localStorage.setItem('bue_voted_dnis', JSON.stringify(appState.votedDNIs));
+
+            // Guardar en cola para Google Sheets / Firestore
+            const votePayload = {
+                dni: dni,
+                lista: candId === 'BLANCO' ? 'VOTO EN BLANCO' : (appState.candidates.find(c => c.id === candId)?.partyName || candId),
+                timestamp: timestamp,
+                hash: hash
+            };
+
+            appState.votesQueue.push(votePayload);
+            localStorage.setItem('bue_pending_votes', JSON.stringify(appState.votesQueue));
+
+            // Intentar envío a Google Sheets
+            sendToGoogleSheets(votePayload);
+
+            // Muestra comprobante
+            document.getElementById('receipt-hash').textContent = hash;
+            switchView('thanks');
+
+            let count = 4;
+            const countdownEl = document.getElementById('countdown');
+            const timer = setInterval(() => {
+                count--;
+                if (countdownEl) countdownEl.textContent = count;
+                if (count <= 0) {
+                    clearInterval(timer);
+                    clearDNIInput();
+                    switchView('login');
+                    updateStepProgress(1);
+                }
+            }, 1000);
+        };
+
+        function sendToGoogleSheets(payload) {
+            if (!appState.sheetsUrl) return;
+
+            fetch(appState.sheetsUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(() => {
+                // Limpiar de la cola de pendientes al sincronizar
+                appState.votesQueue = appState.votesQueue.filter(v => v.hash !== payload.hash);
+                localStorage.setItem('bue_pending_votes', JSON.stringify(appState.votesQueue));
+            }).catch(err => console.log('Sincronización retenida en cola offline'));
+        }
+
+        window.forceSyncPendingVotes = function() {
+            if (!appState.sheetsUrl) {
+                alert('Ingrese primero la URL de Google Apps Script');
+                return;
+            }
+            const pending = [...appState.votesQueue];
+            pending.forEach(vote => sendToGoogleSheets(vote));
+            alert('Sincronización forzada enviada a Google Sheets.');
+        };
+
+        window.saveSheetsUrl = function() {
+            const url = document.getElementById('sheets-script-url').value.trim();
+            appState.sheetsUrl = url;
+            localStorage.setItem('bue_sheets_url', url);
+            alert('URL de Google Apps Script guardada con éxito.');
+        };
+
+        window.changeAdminPIN = function() {
+            const newPin = document.getElementById('new-pin-input').value.trim();
+            if (newPin.length >= 4) {
+                appState.adminPIN = newPin;
+                localStorage.setItem('bue_admin_pin', newPin);
+                alert('PIN de Autoridad de Mesa actualizado correctamente.');
+                document.getElementById('new-pin-input').value = '';
+            } else {
+                alert('El PIN debe tener al menos 4 números.');
+            }
+        };
+
+        window.processPadronText = function() {
+            const text = document.getElementById('padron-text-input').value;
+            const matches = text.match(/\b\d{7,8}\b/g);
+            if (matches && matches.length > 0) {
+                appState.padron = Array.from(new Set([...appState.padron, ...matches]));
+                localStorage.setItem('bue_padron', JSON.stringify(appState.padron));
+                alert(`Se agregaron ${matches.length} DNIs al padrón de habilitados.`);
+                updateMetricsAndChart();
+            } else {
+                alert('No se encontraron números de DNI válidos.');
+            }
+        };
+
+        window.processPadronFile = function() {
+            const fileInput = document.getElementById('padron-file-input');
+            if (!fileInput.files.length) return alert('Seleccione un archivo primero.');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                let dnisFound = [];
+
+                workbook.SheetNames.forEach(sheetName => {
+                    const sheet = workbook.Sheets[sheetName];
+                    const json = XLSX.utils.sheet_to_json(sheet, {header: 1});
+                    json.forEach(row => {
+                        row.forEach(cell => {
+                            if (cell) {
+                                const str = cell.toString().trim();
+                                if (/^\d{7,8}$/.test(str)) dnisFound.push(str);
+                            }
+                        });
+                    });
+                });
+
+                if (dnisFound.length > 0) {
+                    appState.padron = Array.from(new Set([...appState.padron, ...dnisFound]));
+                    localStorage.setItem('bue_padron', JSON.stringify(appState.padron));
+                    alert(`Éxito: Se importaron ${dnisFound.length} alumnos al padrón electoral.`);
+                    updateMetricsAndChart();
+                } else {
+                    alert('No se pudieron extraer números de DNI del archivo.');
+                }
+            };
+            reader.readAsArrayBuffer(fileInput.files[0]);
+        };
+
+        window.exportToExcel = function() {
+            const resultsData = [
+                ["Lista / Agrupación", "Votos Obtenidos"]
+            ];
+            appState.candidates.forEach(c => {
+                resultsData.push([c.partyName + " (" + c.listNumber + ")", appState.results[c.id] || 0]);
+            });
+            resultsData.push(["Voto en Blanco", appState.results['BLANCO'] || 0]);
+
+            const padronData = [["DNI Registrado que Emitió Voto"]];
+            appState.votedDNIs.forEach(dni => padronData.push([dni]));
+
+            const wb = XLSX.utils.book_new();
+            const wsResults = XLSX.utils.aoa_to_sheet(resultsData);
+            const wsPadron = XLSX.utils.aoa_to_sheet(padronData);
+
+            XLSX.utils.book_append_sheet(wb, wsResults, "Resultados Escrutinio");
+            XLSX.utils.book_append_sheet(wb, wsPadron, "Padrón Votantes");
+
+            XLSX.writeFile(wb, "Escrutinio_Centro_Estudiantes.xlsx");
+        };
+
+        function updateMetricsAndChart() {
+            const totalVotes = appState.votedDNIs.length;
+            const padronTotal = appState.padron.length;
+            const turnout = padronTotal > 0 ? ((totalVotes / padronTotal) * 100).toFixed(1) + '%' : 'N/A';
+
+            document.getElementById('metric-total-votes').textContent = totalVotes;
+            document.getElementById('metric-padron-count').textContent = padronTotal;
+            document.getElementById('metric-turnout').textContent = turnout;
+            document.getElementById('metric-pending-sync').textContent = appState.votesQueue.length;
+
+            // Gráfico Chart.js
+            const ctx = document.getElementById('resultsChart').getContext('2d');
+            const labels = appState.candidates.map(c => c.listNumber).concat(['En Blanco']);
+            const data = appState.candidates.map(c => appState.results[c.id] || 0).concat([appState.results['BLANCO'] || 0]);
+            const colors = appState.candidates.map(c => c.color).concat(['#009be3']);
+
+            if (resultsChart) resultsChart.destroy();
+
+            resultsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Votos',
+                        data: data,
+                        backgroundColor: colors
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // Detectar estado de red
+        window.addEventListener('online', () => {
+            document.getElementById('network-status-text').textContent = 'ONLINE';
+            forceSyncPendingVotes();
+        });
+        window.addEventListener('offline', () => {
+            document.getElementById('network-status-text').textContent = 'OFFLINE';
+        });
+
+        // Inicialización al cargar la ventana
+        window.onload = function() {
+            renderCandidateCards();
+            updateStepProgress(1);
+        };
+    </script>
+</body>
+</html>
