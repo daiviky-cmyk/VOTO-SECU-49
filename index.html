@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js para estadísticas -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- SheetJS para exportar Excel -->
+    <!-- SheetJS para exportar/importar Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- PDF.js para lectura de Padrón en PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
@@ -358,7 +358,7 @@
             <!-- CARGA DE PADRÓN Y NOMBRES -->
             <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
                 <h4 class="font-black text-sm uppercase text-slate-700 flex items-center gap-2">
-                    <i class="fa-solid fa-users-rectangle text-bue-blue"></i> Carga de Padrón Electoral (DNIs y Nombres)
+                    <i class="fa-solid fa-users-rectangle text-bue-blue"></i> Carga de Padrón Electoral (PDF / Excel / Texto)
                 </h4>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -372,7 +372,7 @@
 
                     <div class="bg-white p-4 rounded-lg border border-slate-300 space-y-2">
                         <span class="text-xs font-black uppercase text-slate-700 block">Opción 2: Pegar DNIs y Nombres</span>
-                        <textarea id="padron-text-input" rows="2" placeholder="Formato: 12345678, PEREZ JUAN... o sólo DNIs por línea" class="w-full p-2 text-xs font-mono border rounded"></textarea>
+                        <textarea id="padron-text-input" rows="2" placeholder="Formato: 12345678, PEREZ JUAN... o un alumno por línea" class="w-full p-2 text-xs font-mono border rounded"></textarea>
                         <button onclick="processPadronText()" class="w-full bg-slate-700 text-white font-bold py-2 rounded text-xs uppercase hover:bg-slate-800">
                             Cargar Lista de Texto
                         </button>
@@ -419,7 +419,6 @@
             votedDNIs: JSON.parse(localStorage.getItem('bue_voted_dnis') || '[]'),
             padron: JSON.parse(localStorage.getItem('bue_padron') || '[]'),
             padronNames: JSON.parse(localStorage.getItem('bue_padron_names') || '{}'),
-            results: JSON.parse(localStorage.getItem('bue_results') || '{"1":0,"2":0,"3":0,"BLANCO":0}'),
             candidates: JSON.parse(localStorage.getItem('bue_candidates_config') || JSON.stringify([
                 {
                     id: "1",
@@ -530,19 +529,22 @@
                 return showDNIError('Ingrese un número de DNI válido (mínimo 7 dígitos).');
             }
 
-            // REGLA DE ORO: CONTROL DE VOTO ÚNICO POR DNI
             if (appState.votedDNIs.includes(dni)) {
                 return showDNIError(`¡EL DNI ${dni} YA EMITIÓ SU VOTO EN ESTA ELECCIÓN!`);
             }
 
-            // CONTROL DE PADRÓN HABILITADO
             if (appState.padron.length > 0 && !appState.padron.includes(dni)) {
                 return showDNIError('El DNI no se encuentra registrado en el padrón habilitado.');
             }
 
             appState.enteredDNI = dni;
-            // Buscar automáticamente el Nombre y Apellido desde el Padrón cargado
-            appState.enteredVoterName = appState.padronNames[dni] || 'DESCONOCIDO / NO REGISTRADO EN PADRON';
+            
+            // BUSCADOR ACTIVO Y CONTRASTADOR DE PADRÓN EN TIEMPO REAL
+            let foundName = appState.padronNames[dni];
+            if (!foundName) {
+                foundName = 'REGISTRADO EN PADRÓN';
+            }
+            appState.enteredVoterName = foundName;
 
             switchView('ballot');
             updateStepProgress(2);
@@ -711,7 +713,6 @@
             }
         };
 
-        // FUNCIONES DE LIMPIEZA DE DATOS
         window.clearVotedDNIs = function() {
             if (confirm('¿Está seguro de reiniciar los votos emitidos? Esto permitirá que todos los DNIs puedan volver a votar.')) {
                 appState.votedDNIs = [];
@@ -834,7 +835,6 @@
             const timestamp = new Date().toLocaleString('es-AR');
             const hash = 'DIG-' + Math.random().toString(36).substring(2, 9).toUpperCase();
 
-            // REGISTRAR DNI COMO VOTADO
             appState.votedDNIs.push(dni);
             localStorage.setItem('bue_voted_dnis', JSON.stringify(appState.votedDNIs));
 
@@ -865,7 +865,6 @@
             }, 1000);
         };
 
-        // ENVÍO COMPLETO A GOOGLE SHEETS
         function sendToGoogleSheets(payload) {
             if (!appState.sheetsUrl) return;
 
@@ -910,6 +909,7 @@
             alert(`Se registraron ${addedCount} estudiantes en el padrón.`);
         };
 
+        // PARSER MEJORADO PARA PDF Y EXCEL CON EXTRACCIÓN DE NOMBRES
         window.processPadronFile = function() {
             const fileInput = document.getElementById('padron-file-input');
             if (!fileInput.files.length) return alert('Seleccione un archivo primero.');
@@ -923,22 +923,41 @@
                     try {
                         const typedarray = new Uint8Array(e.target.result);
                         const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                        let fullText = '';
+                        let fullTextLines = [];
 
                         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                             const page = await pdf.getPage(pageNum);
                             const textContent = await page.getTextContent();
-                            fullText += ' ' + textContent.items.map(item => item.str).join(' ');
+                            const lineStr = textContent.items.map(item => item.str).join(' ');
+                            fullTextLines.push(lineStr);
                         }
 
-                        const matches = fullText.match(/\b\d{7,8}\b/g);
+                        const allContent = fullTextLines.join(' ');
+                        const matches = allContent.match(/\b\d{7,8}\b/g);
+
                         if (matches && matches.length > 0) {
-                            appState.padron = Array.from(new Set([...appState.padron, ...matches]));
+                            matches.forEach(dni => {
+                                if (!appState.padron.includes(dni)) appState.padron.push(dni);
+                            });
+
+                            // EXTRAER NOMBRES VINCULADOS A CADA DNI EN EL PDF
+                            fullTextLines.forEach(line => {
+                                const dniMatch = line.match(/\b\d{7,8}\b/);
+                                if (dniMatch) {
+                                    const dni = dniMatch[0];
+                                    const extractedName = line.replace(dni, '').replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '').trim();
+                                    if (extractedName.length > 3) {
+                                        appState.padronNames[dni] = extractedName.toUpperCase();
+                                    }
+                                }
+                            });
+
                             localStorage.setItem('bue_padron', JSON.stringify(appState.padron));
-                            alert(`¡Éxito! Se importaron ${matches.length} DNIs desde el PDF.`);
+                            localStorage.setItem('bue_padron_names', JSON.stringify(appState.padronNames));
+                            alert(`¡Éxito! Se procesaron ${matches.length} DNIs con sus correspondientes nombres desde el PDF.`);
                         }
                     } catch (err) {
-                        alert('Error al leer el PDF.');
+                        alert('Error al leer el archivo PDF.');
                     }
                 };
                 reader.readAsArrayBuffer(file);
